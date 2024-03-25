@@ -1,0 +1,96 @@
+public with sharing class ConvertedLeadArchiver {
+
+    @AuraEnabled
+    public static Boolean archiveConvertedLeads(Date archiveDate) {
+        try {
+            // Query converted leads before the specified date
+            List<Lead> leadsToArchive = [SELECT Id, Name, Email
+                                         FROM Lead
+                                         WHERE IsConverted = true AND ConvertedDate < :archiveDate
+                                         LIMIT 1000];
+
+            // Preparing lists for Big Objects and for deletion
+            List<Converted_Lead__b> leadsBigObjects = new List<Converted_Lead__b>();
+            List<Lead> leadsToDelete = new List<Lead>();
+
+            // Iterate through each lead and prepare for archiving
+            for (Lead ld : leadsToArchive) {
+                Converted_Lead__b leadBigObj = new Converted_Lead__b();
+                // Set fields for the Big Object from the Lead
+                leadBigObj.Id__c = ld.Id;
+                leadBigObj.Name__c = ld.Name;
+                leadBigObj.Email__c = ld.Email;
+
+                leadsBigObjects.add(leadBigObj);
+                leadsToDelete.add(ld);
+            }
+
+            // Insert Big Object records
+            Database.SaveResult[] saveResults = Database.insertImmediate(leadsBigObjects);
+
+            // Delete the original leads
+            delete leadsToDelete;
+
+            // Check if there are more leads to process
+            return leadsToArchive.size() == 1000 ? false : true;
+        } catch (Exception e) {
+            System.debug(e);
+            return false;
+        }
+    }
+
+    @AuraEnabled
+    public static List<Converted_Lead__b> getArchivedLeads(String Id, String email, String name) {
+        // Construct the SOQL query to retrieve the archived leads
+        List<Converted_Lead__b> leads;
+        String query = 'SELECT Id__c, Name__c, Email__c, Account_Id__c FROM Converted_Lead__b';
+
+        // Add filters based on Name or Email if provided
+        if (String.isNotBlank(email) || String.isNotBlank(name)) {
+            query += ' WHERE ';
+            List<String> filters = new List<String>();
+            if (String.isNotBlank(email)) { 
+                filters.add('Email__c = :email');
+            }
+            if (String.isNotBlank(Id)) {
+                filters.add('Id__c = :Id');
+            }
+            if (String.isNotBlank(Name)) {
+                filters.add('Name__c = :name');
+            }
+            query += String.join(filters, ' AND ');
+        }
+
+        query += ' LIMIT 30';
+        leads = Database.query(query);
+        return leads;
+    }
+    
+    public static List<Archived_Lead_Report__c> createArchivedLeadReport(){
+        List<Converted_Lead__b> leads = getArchivedLeads(null,null,null);
+        List<Archived_Lead_Report__c> alrlist = new List<Archived_Lead_Report__c>();
+        for(Converted_Lead__b cl:leads) {
+        	Archived_Lead_Report__c alr = new Archived_Lead_Report__c(
+                Account_Id__c = cl.Account_Id__c,
+                Archived_Lead_Email__c = cl.Email__c,
+                Name__c	= cl.Name__c,
+                Lead_Id__c = cl.Id__c                
+            );
+           alrlist.add(alr);
+        }
+        upsert alrlist;
+        return alrlist;
+    }
+    
+        @AuraEnabled
+    public static Converted_Lead__b getArchivedLead(String leadId) {
+        // Construct the SOQL query to retrieve the archived leads
+        Return [SELECT Email__c, Id__c
+                FROM Converted_Lead__b
+                WHERE Id__c = :leadId
+               ];
+
+    }
+
+    // Additional methods like getArchivedLead (similar to getArchivedCase) can be added as needed
+}
