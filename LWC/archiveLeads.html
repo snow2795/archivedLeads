@@ -1,0 +1,15 @@
+<template>
+    <lightning-card title="Archive Converted Leads" icon-name="standard:lead">
+        <div class="slds-m-around_medium">
+            <lightning-input type="date" 
+                             label="Select a Date" 
+                             onchange={handleDateChange}>
+            </lightning-input>
+            <lightning-button label="Archive Leads" 
+                              variant="brand" 
+                              onclick={archiveClick}
+                              class="slds-m-top_small">
+            </lightning-button>
+        </div>
+    </lightning-card>
+</template>
